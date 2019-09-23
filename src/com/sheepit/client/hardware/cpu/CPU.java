@@ -84,10 +84,18 @@ public class CPU {
 				this.arch = null;
 				break;
 		}
+ 	}
+ 	
+	public void generateData() {
 	}
-	
-	public boolean haveData() {
-		return this.name != null && this.model != null && this.family != null && this.arch != null;
+
+ 	public boolean haveData() {
+ 		return this.name != null && this.model != null && this.family != null && this.arch != null;
+ 	}
+
+	@Override
+	public String toString() {
+		return "CPU [name=" + name + ", model=" + model + ", family=" + family + ", arch=" + arch + "]";
 	}
-	
-}
+ 	
+ }

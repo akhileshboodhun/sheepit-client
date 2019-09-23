@@ -1,0 +1,255 @@
+Index: src/com/sheepit/client/hardware/cpu/CPU.java
+===================================================================
+--- src/com/sheepit/client/hardware/cpu/CPU.java	(révision 213)
++++ src/com/sheepit/client/hardware/cpu/CPU.java	(copie de travail)
+@@ -86,8 +86,16 @@
+ 		}
+ 	}
+ 	
++	public void generateData() {
++	}
++
+ 	public boolean haveData() {
+ 		return this.name != null && this.model != null && this.family != null && this.arch != null;
+ 	}
++
++	@Override
++	public String toString() {
++		return "CPU [name=" + name + ", model=" + model + ", family=" + family + ", arch=" + arch + "]";
++	}
+ 	
+ }
+Index: src/com/sheepit/client/os/Linux.java
+===================================================================
+--- src/com/sheepit/client/os/Linux.java	(révision 213)
++++ src/com/sheepit/client/os/Linux.java	(copie de travail)
+@@ -18,8 +18,11 @@
+  */
+ package com.sheepit.client.os;
+ 
++import java.io.BufferedReader;
+ import java.io.File;
+ import java.io.IOException;
++import java.io.InputStreamReader;
++import java.util.ArrayList;
+ import java.util.HashMap;
+ import java.util.List;
+ import java.util.Map;
+@@ -27,6 +30,8 @@
+ 
+ import com.sheepit.client.Log;
+ import com.sheepit.client.hardware.cpu.CPU;
++import com.sheepit.client.os.linux.CPUArm;
++import com.sheepit.client.os.linux.CPUx86;
+ 
+ public class Linux extends OS {
+ 	private final String NICE_BINARY_PATH = "nice";
+@@ -48,42 +53,41 @@
+ 	
+ 	@Override
+ 	public CPU getCPU() {
+-		CPU ret = new CPU();
++		String cpuArch = "x86_64";
++		ProcessBuilder builder = new ProcessBuilder();
++		ArrayList<String> command = new ArrayList<String>(2);
++		command.add("uname");
++		command.add("-m");
++		builder.command(command);
++		Process process = null;
+ 		try {
+-			String filePath = "/proc/cpuinfo";
+-			Scanner scanner = new Scanner(new File(filePath));
+-			
+-			while (scanner.hasNextLine()) {
+-				String line = scanner.nextLine();
+-				if (line.startsWith("model name")) {
+-					String buf[] = line.split(":");
+-					if (buf.length > 1) {
+-						ret.setName(buf[1].trim());
+-					}
+-				}
+-				
+-				if (line.startsWith("cpu family")) {
+-					String buf[] = line.split(":");
+-					if (buf.length > 1) {
+-						ret.setFamily(buf[1].trim());
+-					}
+-				}
+-				
+-				if (line.startsWith("model") && line.startsWith("model name") == false) {
+-					String buf[] = line.split(":");
+-					if (buf.length > 1) {
+-						ret.setModel(buf[1].trim());
+-					}
+-				}
++			process = builder.start();
++			BufferedReader input = new BufferedReader(new InputStreamReader(process.getInputStream()));
++			StringBuilder sb = new StringBuilder();
++			String aux = "";
++			while ((aux = input.readLine()) != null) {
++				sb.append(aux);
+ 			}
+-			scanner.close();
++			cpuArch = sb.toString().trim();
+ 		}
+-		catch (java.lang.NoClassDefFoundError e) {
+-			System.err.println("OS.Linux::getCPU error " + e + " mostly because Scanner class was introduced by Java 5 and you are running a lower version");
++		catch (IOException e) {
+ 		}
+-		catch (Exception e) {
+-			e.printStackTrace();
++		finally {
++			if (process != null) {
++				process.destroy();
++			}
++		}
++		
++		CPU ret;
++		if (cpuArch.contains("arm")) {
++			ret = new CPUArm();
++		}
++		else {
++			ret = new CPUx86();
+ 		}
++		
++		ret.setArch(cpuArch);
++		ret.generateData();
+ 		return ret;
+ 	}
+ 	
+Index: src/com/sheepit/client/os/linux/CPUArm.java
+===================================================================
+--- src/com/sheepit/client/os/linux/CPUArm.java	(révision 0)
++++ src/com/sheepit/client/os/linux/CPUArm.java	(copie de travail)
+@@ -0,0 +1,63 @@
++/*
++ * Copyright (C) 2016 Laurent CLOUET
++ * Author Laurent CLOUET <laurent.clouet@nopnop.net>
++ *
++ * This program is free software; you can redistribute it and/or 
++ * modify it under the terms of the GNU General Public License
++ * as published by the Free Software Foundation; version 2
++ * of the License.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
++ */
++package com.sheepit.client.os.linux;
++
++import java.io.File;
++import java.io.FileNotFoundException;
++import java.util.Scanner;
++
++import com.sheepit.client.hardware.cpu.CPU;
++
++public class CPUArm extends CPU {
++	
++	public void generateData() {
++		try {
++			String filePath = "/proc/cpuinfo";
++			Scanner scanner = new Scanner(new File(filePath));
++			
++			while (scanner.hasNextLine()) {
++				String line = scanner.nextLine();
++				if (line.startsWith("Processor") || line.startsWith("model name")) {
++					String buf[] = line.split(":");
++					if (buf.length > 1) {
++						setName(buf[1].trim());
++					}
++				}
++				
++				if (line.startsWith("CPU architecture")) {
++					String buf[] = line.split(":");
++					if (buf.length > 1) {
++						setFamily(buf[1].trim());
++					}
++				}
++				
++				if (line.startsWith("CPU implementer")) {
++					String buf[] = line.split(":");
++					if (buf.length > 1) {
++						setModel(buf[1].trim());
++					}
++				}
++			}
++			scanner.close();
++		}
++		catch (FileNotFoundException e) {
++			e.printStackTrace();
++		}
++	}
++}
+Index: src/com/sheepit/client/os/linux/CPUx86.java
+===================================================================
+--- src/com/sheepit/client/os/linux/CPUx86.java	(révision 0)
++++ src/com/sheepit/client/os/linux/CPUx86.java	(copie de travail)
+@@ -0,0 +1,63 @@
++/*
++ * Copyright (C) 2016 Laurent CLOUET
++ * Author Laurent CLOUET <laurent.clouet@nopnop.net>
++ *
++ * This program is free software; you can redistribute it and/or 
++ * modify it under the terms of the GNU General Public License
++ * as published by the Free Software Foundation; version 2
++ * of the License.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
++ */
++package com.sheepit.client.os.linux;
++
++import java.io.File;
++import java.io.FileNotFoundException;
++import java.util.Scanner;
++
++import com.sheepit.client.hardware.cpu.CPU;
++
++public class CPUx86 extends CPU {
++	
++	public void generateData() {
++		try {
++			String filePath = "/proc/cpuinfo";
++			Scanner scanner = new Scanner(new File(filePath));
++			
++			while (scanner.hasNextLine()) {
++				String line = scanner.nextLine();
++				if (line.startsWith("model name")) {
++					String buf[] = line.split(":");
++					if (buf.length > 1) {
++						setName(buf[1].trim());
++					}
++				}
++				
++				if (line.startsWith("cpu family")) {
++					String buf[] = line.split(":");
++					if (buf.length > 1) {
++						setFamily(buf[1].trim());
++					}
++				}
++				
++				if (line.startsWith("model") && line.startsWith("model name") == false) {
++					String buf[] = line.split(":");
++					if (buf.length > 1) {
++						setModel(buf[1].trim());
++					}
++				}
++			}
++			scanner.close();
++		}
++		catch (FileNotFoundException e) {
++			e.printStackTrace();
++		}
++	}
++}

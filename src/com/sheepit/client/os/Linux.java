@@ -16,10 +16,13 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package com.sheepit.client.os;
-
+ package com.sheepit.client.os;
+ 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,9 +30,11 @@ import java.util.Scanner;
 
 import com.sheepit.client.Log;
 import com.sheepit.client.hardware.cpu.CPU;
+import com.sheepit.client.os.linux.CPUArm;
+import com.sheepit.client.os.linux.CPUx86;
 
 public class Linux extends OS {
-	private final String NICE_BINARY_PATH = "nice";
+ 	private final String NICE_BINARY_PATH = "nice";
 	private Boolean hasNiceBinary;
 	
 	public Linux() {
@@ -45,48 +50,48 @@ public class Linux extends OS {
 	public String getRenderBinaryPath() {
 		return "rend.exe";
 	}
-	
-	@Override
-	public CPU getCPU() {
-		CPU ret = new CPU();
-		try {
-			String filePath = "/proc/cpuinfo";
-			Scanner scanner = new Scanner(new File(filePath));
-			
-			while (scanner.hasNextLine()) {
-				String line = scanner.nextLine();
-				if (line.startsWith("model name")) {
-					String buf[] = line.split(":");
-					if (buf.length > 1) {
-						ret.setName(buf[1].trim());
-					}
-				}
-				
-				if (line.startsWith("cpu family")) {
-					String buf[] = line.split(":");
-					if (buf.length > 1) {
-						ret.setFamily(buf[1].trim());
-					}
-				}
-				
-				if (line.startsWith("model") && line.startsWith("model name") == false) {
-					String buf[] = line.split(":");
-					if (buf.length > 1) {
-						ret.setModel(buf[1].trim());
-					}
-				}
+ 	
+ 	@Override
+ 	public CPU getCPU() {
+		String cpuArch = "x86_64";
+		ProcessBuilder builder = new ProcessBuilder();
+		ArrayList<String> command = new ArrayList<String>(2);
+		command.add("uname");
+		command.add("-m");
+		builder.command(command);
+		Process process = null;
+ 		try {
+			process = builder.start();
+			BufferedReader input = new BufferedReader(new InputStreamReader(process.getInputStream()));
+			StringBuilder sb = new StringBuilder();
+			String aux = "";
+			while ((aux = input.readLine()) != null) {
+				sb.append(aux);
+ 			}
+			cpuArch = sb.toString().trim();
+ 		}
+		catch (IOException e) {
+ 		}
+		finally {
+			if (process != null) {
+				process.destroy();
 			}
-			scanner.close();
 		}
-		catch (java.lang.NoClassDefFoundError e) {
-			System.err.println("OS.Linux::getCPU error " + e + " mostly because Scanner class was introduced by Java 5 and you are running a lower version");
+		
+		CPU ret;
+		if (cpuArch.contains("arm")) {
+			ret = new CPUArm();
 		}
-		catch (Exception e) {
-			e.printStackTrace();
-		}
-		return ret;
-	}
-	
+		else {
+			ret = new CPUx86();
+ 		}
+
+
+		ret.setArch(cpuArch);
+		ret.generateData();
+ 		return ret;
+ 	}
+ 	
 	@Override
 	public long getMemory() {
 		try {
